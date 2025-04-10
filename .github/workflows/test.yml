@@ -1,0 +1,49 @@
+name: Test
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  test:
+    runs-on: windows-latest
+    steps:
+      - name: Install FPC
+        run: |
+          cd "$Env:RUNNER_TEMP"
+
+          # Must i386, See: https://github.com/Bill-Stewart/UninsIS/pull/7#issuecomment-2790769116
+          curl -LO 'http://downloads.sourceforge.net/project/freepascal/Win32/3.2.2/fpc-3.2.2.i386-win32.exe'
+          .\fpc-3.2.2.i386-win32.exe /VERYSILENT /SP- /DIR="$Env:RUNNER_TEMP\fpc" | Out-Null
+
+          echo "$Env:RUNNER_TEMP\fpc\bin\i386-win32" >> $Env:GITHUB_PATH
+
+          echo "$Env:GITHUB_PATH"
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Add Dependencies
+        # Ref: https://github.com/Bill-Stewart/UninsIS/blob/e228f0511aea95282a7919f90191c4dd69165f6f/ISPackage.pp#L56-L59
+        run: |
+          gh api repos/Bill-Stewart/VersionStrings/contents/VersionStrings.pp -q '.download_url' | xargs curl -O
+          gh api repos/Bill-Stewart/WindowsRegistry/contents/WindowsRegistry.pp -q '.download_url' | xargs curl -O
+          gh api repos/Bill-Stewart/WindowsString/contents/WindowsString.pp -q '.download_url' | xargs curl -O
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Build
+        run: |
+          windres.exe .\UninsIS.rc -o UninsIS.res
+          fpc.exe -CX -O3 -WR -Xs -XX UninsIS.pp
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: UninsIS
+          path: |
+            UninsIS.dll
+          if-no-files-found: error
+          overwrite: true
+          retention-days: 5
