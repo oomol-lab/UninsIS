@@ -197,7 +197,7 @@ function TInnoSetupPackage.GetSilentUninstallCommandLine(): string;
 const
   // Inno Setup command-line parameters required for silent uninstall
   SilentArgs: array[0..2] of string = (
-    '/SILENT', '/SUPPRESSMSGBOXES', '/NORESTART'
+    '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART'
   );
 var
   UninstallString, CommandName, Args: string;
