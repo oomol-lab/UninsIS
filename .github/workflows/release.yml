@@ -1,0 +1,60 @@
+name: Test
+
+on:
+  push:
+    tags: 
+      - 'v*'
+
+jobs:
+  test:
+    runs-on: windows-latest
+    steps:
+      - name: Install FPC
+        run: |
+          cd "$Env:RUNNER_TEMP"
+
+          # Must i386, See: https://github.com/Bill-Stewart/UninsIS/pull/7#issuecomment-2790769116
+          curl -LO 'http://downloads.sourceforge.net/project/freepascal/Win32/3.2.2/fpc-3.2.2.i386-win32.exe'
+          .\fpc-3.2.2.i386-win32.exe /VERYSILENT /SP- /DIR="$Env:RUNNER_TEMP\fpc" | Out-Null
+
+          echo "$Env:RUNNER_TEMP\fpc\bin\i386-win32" >> $Env:GITHUB_PATH
+
+          echo "$Env:GITHUB_PATH"
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Add Dependencies
+        # Ref: https://github.com/Bill-Stewart/UninsIS/blob/e228f0511aea95282a7919f90191c4dd69165f6f/ISPackage.pp#L56-L59
+        run: |
+          gh api repos/Bill-Stewart/VersionStrings/contents/VersionStrings.pp -q '.download_url' | xargs curl -O
+          gh api repos/Bill-Stewart/WindowsRegistry/contents/WindowsRegistry.pp -q '.download_url' | xargs curl -O
+          gh api repos/Bill-Stewart/WindowsString/contents/WindowsString.pp -q '.download_url' | xargs curl -O
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Build
+        run: |
+          windres.exe .\UninsIS.rc -o UninsIS.res
+          fpc.exe -CX -O3 -WR -Xs -XX UninsIS.pp
+
+      - name: Gen Release Notes
+        run: |
+          $sha256 = (Get-FileHash -Path UninsIS.dll -Algorithm SHA256).Hash.ToLower()
+
+          Set-Content -Path release_notes.md -Value '```'
+          Add-Content -Path release_notes.md -Value "$sha256  UninsIS.dll"
+          Add-Content -Path release_notes.md -Value '```'
+
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            UninsIS.dll
+          generate_release_notes: true
+          body_path: release_notes.md
+          draft: false
+          prerelease: false
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
